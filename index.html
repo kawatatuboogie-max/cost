@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>スマート家計簿（AQトークン対応版）</title>
+    <title>スマート家計簿（CORS対応版）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -173,7 +173,7 @@
             });
         }
 
-        // AQ...トークンをBearer認証として正しく送信する解析処理
+        // CORSプロキシを経由してBearer認証でリクエストを送る処理
         document.getElementById('receiptInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -190,8 +190,11 @@
             try {
                 const base64Image = await fileToBase64(file);
                 
-                // 正しいエンドポイントとBearer認証ヘッダーの指定
-                const response = await fetch('https://aistudio.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+                // CORS制限を回避するためのプロキシ経由URL
+                const targetUrl = 'https://aistudio.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+                const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+
+                const response = await fetch(targetUrl, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -206,6 +209,10 @@
                         }]
                     })
                 });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
                 const data = await response.json();
                 if (data.error) {
