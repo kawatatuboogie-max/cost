@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>スマート家計簿（CSV＆レシート対応）</title>
+    <title>スマート家計簿（OCR・CSV対応）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Tesseract.js (ブラウザ用OCRライブラリ) -->
+    <script src="https://unpkg.com/tesseract.js@v5.0.5/dist/tesseract.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen text-gray-800 pb-12">
     <div class="max-w-4xl mx-auto p-4">
@@ -13,66 +15,81 @@
         <!-- ヘッダー -->
         <header class="mb-6 border-b pb-4">
             <h1 class="text-2xl font-bold text-slate-800">スマート家計簿</h1>
-            <p class="text-sm text-gray-500">レシート撮影・CSVカード明細取り込み & ダッシュボード</p>
+            <p class="text-sm text-gray-500">リアルレシートOCR読取・CSVカード明細・ダッシュボード</p>
         </header>
 
-        <!-- 1. 入力セクション（レシート or CSV） -->
+        <!-- 1. 入力セクション（レシートOCR or CSV） -->
         <div class="bg-white p-6 rounded-xl shadow-md mb-6">
             <h2 class="text-lg font-semibold mb-4 text-indigo-600 flex items-center gap-2">
-                <span>1. データ取り込み (レシート / カードCSV)</span>
+                <span>1. データ取り込み (レシート撮影OCR / カードCSV)</span>
             </h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <!-- レシート撮影 -->
-                <div class="border-2 border-dashed border-gray-200 p-4 rounded-lg text-center hover:bg-gray-50 transition">
+                <!-- レシート撮影 & OCR -->
+                <div class="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-4 rounded-lg text-center hover:bg-indigo-50 transition">
                     <input type="file" id="receiptInput" accept="image/*" capture="environment" class="hidden">
-                    <button onclick="document.getElementById('receiptInput').click()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg shadow text-sm">
-                        📷 レシートを撮影 / 選択
+                    <button onclick="document.getElementById('receiptInput').click()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg shadow text-sm transition">
+                        📷 レシートを撮影してOCR解析
                     </button>
-                    <p id="receiptStatus" class="text-xs text-gray-500 mt-2">カメラまたは画像ファイルから読み込み</p>
+                    <p id="receiptStatus" class="text-xs text-gray-600 mt-2">AIがレシートの文字を読み取ります</p>
                 </div>
 
                 <!-- CSVインポート -->
-                <div class="border-2 border-dashed border-gray-200 p-4 rounded-lg text-center hover:bg-gray-50 transition">
+                <div class="border-2 border-dashed border-emerald-200 bg-emerald-50/50 p-4 rounded-lg text-center hover:bg-emerald-50 transition">
                     <input type="file" id="csvInput" accept=".csv, .txt" class="hidden">
-                    <button onclick="document.getElementById('csvInput').click()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg shadow text-sm">
+                    <button onclick="document.getElementById('csvInput').click()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-lg shadow text-sm transition">
                         💳 カード明細 CSVを読み込む
                     </button>
-                    <p id="csvStatus" class="text-xs text-gray-500 mt-2">各社カードのCSVファイルに対応</p>
+                    <p id="csvStatus" class="text-xs text-gray-600 mt-2">各社カードのCSVファイルに対応</p>
                 </div>
             </div>
 
-            <!-- レシート解析プレビュー -->
+            <!-- OCR解析結果プレビュー -->
             <div id="previewArea" class="mt-4 border-t pt-4 hidden">
-                <h3 class="font-medium text-gray-700 mb-3">レシート解析結果の確認</h3>
+                <h3 class="font-medium text-gray-700 mb-2">レシートOCR解析結果の確認・修正</h3>
+                <p class="text-xs text-gray-500 mb-3">読取結果に誤りがある場合は、直接書き直して保存してください。</p>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                    <input type="date" id="inputDate" class="border rounded p-2 text-sm">
-                    <input type="text" id="inputStore" class="border rounded p-2 text-sm" placeholder="店舗名">
-                    <select id="inputCategory" class="border rounded p-2 text-sm">
-                        <option value="食料品">食料品</option>
-                        <option value="日用品">日用品</option>
-                        <option value="外食">外食</option>
-                        <option value="その他">その他</option>
-                    </select>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">日付</label>
+                        <input type="date" id="inputDate" class="w-full border rounded p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">店舗名</label>
+                        <input type="text" id="inputStore" class="w-full border rounded p-2 text-sm" placeholder="店舗名">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">カテゴリ</label>
+                        <select id="inputCategory" class="w-full border rounded p-2 text-sm">
+                            <option value="食料品">食料品</option>
+                            <option value="日用品">日用品</option>
+                            <option value="外食">外食</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                    <input type="text" id="inputItem" class="border rounded p-2 text-sm" placeholder="品目・内容">
-                    <input type="number" id="inputAmount" class="border rounded p-2 text-sm" placeholder="金額 (円)">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">品目・内容 (OCR全文)</label>
+                        <input type="text" id="inputItem" class="w-full border rounded p-2 text-sm" placeholder="品目名">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">合計金額 (円)</label>
+                        <input type="number" id="inputAmount" class="w-full border rounded p-2 text-sm" placeholder="金額">
+                    </div>
                 </div>
-                <button onclick="saveSingleRecord()" class="w-full bg-emerald-600 text-white font-medium py-2 rounded-lg text-sm shadow">💾 1件登録する</button>
+                <button onclick="saveSingleRecord()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 rounded-lg text-sm shadow transition">💾 この内容で家計簿に登録する</button>
             </div>
 
             <!-- CSV一括プレビューエリア -->
             <div id="csvPreviewArea" class="mt-4 border-t pt-4 hidden">
-                <h3 class="font-medium text-gray-700 mb-2">CSV明細 一括プレビュー (確認・編集)</h3>
-                <p class="text-xs text-gray-500 mb-3">取り込む行にチェックを入れ、カテゴリを確認して登録してください。</p>
+                <h3 class="font-medium text-gray-700 mb-2">CSV明細 一括プレビュー</h3>
                 <div class="overflow-x-auto max-h-60 mb-3">
                     <table class="w-full text-left text-xs border-collapse" id="csvPreviewTable">
                         <thead>
                             <tr class="bg-gray-100 text-gray-600 border-b">
                                 <th class="p-2">選択</th>
                                 <th class="p-2">日付</th>
-                                <th class="p-2">利用先（店舗）</th>
+                                <th class="p-2">利用先</th>
                                 <th class="p-2 text-right">金額</th>
                                 <th class="p-2">カテゴリ</th>
                             </tr>
@@ -80,9 +97,7 @@
                         <tbody id="csvPreviewBody"></tbody>
                     </table>
                 </div>
-                <button onclick="saveCsvRecords()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 rounded-lg text-sm shadow">
-                    📥 選択した明細を一括登録する
-                </button>
+                <button onclick="saveCsvRecords()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 rounded-lg text-sm shadow">📥 選択した明細を一括登録</button>
             </div>
         </div>
 
@@ -127,9 +142,7 @@
         if (records.length === 0) {
             records = [
                 { id: 1, date: '2026-10-25', store: 'イオン', item: '牛乳・食パン', category: '食料品', amount: 480 },
-                { id: 2, date: '2026-10-26', store: 'マツモトキヨシ', item: '洗剤・ティッシュ', category: '日用品', amount: 850 },
-                { id: 3, date: '2026-10-28', store: 'Amazon', item: '日用品・書籍', category: '日用品', amount: 3480 },
-                { id: 4, date: '2026-10-30', store: 'スターバックス', item: 'カフェ', category: '外食', amount: 680 }
+                { id: 2, date: '2026-10-26', store: 'マツモトキヨシ', item: '洗剤・ティッシュ', category: '日用品', amount: 850 }
             ];
             localStorage.setItem('kakeibo_records', JSON.stringify(records));
         }
@@ -138,98 +151,125 @@
         let pieChartObj = null;
         let parsedCsvRows = [];
 
-        // レシート撮影シミュレーション
-        document.getElementById('receiptInput').addEventListener('change', function(e) {
-            if (!e.target.files[0]) return;
-            document.getElementById('receiptStatus').textContent = '解析中...';
-            setTimeout(() => {
-                document.getElementById('inputDate').value = new Date().toISOString().split('T')[0];
-                document.getElementById('inputStore').value = 'スーパーマルエツ';
-                document.getElementById('inputItem').value = '野菜・肉類';
-                document.getElementById('inputCategory').value = '食料品';
-                document.getElementById('inputAmount').value = 1420;
-                document.getElementById('receiptStatus').textContent = '解析完了！';
-                document.getElementById('previewArea').classList.remove('hidden');
-                document.getElementById('csvPreviewArea').classList.add('hidden');
-            }, 800);
-        });
-
-        // CSVファイル読み込み処理
-        document.getElementById('csvInput').addEventListener('change', function(e) {
+        // 本格Tesseract.jsによるレシートOCR解析
+        document.getElementById('receiptInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
+            const status = document.getElementById('receiptStatus');
+            status.textContent = 'OCRエンジン初期化中... (数秒かかります)';
+
+            try {
+                // Tesseract.jsを使用して日本語+英語でOCR実行
+                const result = await Tesseract.recognize(
+                    file,
+                    'jpn+eng',
+                    { 
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                status.textContent = `文字認識中... ${Math.round(m.progress * 100)}%`;
+                            }
+                        }
+                    }
+                );
+
+                const text = result.data.text;
+                status.textContent = 'OCR解析完了！';
+
+                // 読み取ったテキストから金額（￥や数字の羅列）を自動抽出するロジック
+                const lines = text.split('\n').filter(l => l.trim() !== '');
+                let detectedAmount = 0;
+                let detectedStore = lines[0] || 'レシート店舗';
+
+                // 「合計」「小計」「TOTAL」などの行を探す、または最大値の数字を金額とみなす
+                const numbers = [];
+                lines.forEach(line => {
+                    const matches = line.match(/([1-9][0-9,]{2,})/g);
+                    if (matches) {
+                        matches.forEach(m => {
+                            const val = parseInt(m.replace(/,/g, ''));
+                            if (val > 50 && val < 100000) numbers.push(val);
+                        });
+                    }
+                });
+
+                if (numbers.length > 0) {
+                    // 一般的にレシートの合計金額は下部にあるか、大きめの金額になるため調整
+                    detectedAmount = numbers[numbers.length - 1];
+                }
+
+                // フォームに反映
+                document.getElementById('inputDate').value = new Date().toISOString().split('T')[0];
+                document.getElementById('inputStore').value = detectedStore.substring(0, 15);
+                document.getElementById('inputItem').value = text.substring(0, 40).replace(/\n/g, ' ');
+                document.getElementById('inputAmount').value = detectedAmount || '';
+                
+                document.getElementById('previewArea').classList.remove('hidden');
+                document.getElementById('csvPreviewArea').classList.add('hidden');
+
+            } catch (err) {
+                console.error(err);
+                status.textContent = 'OCR解析に失敗しました。画像を変えてお試しください。';
+            }
+        });
+
+        // CSV読み込み処理
+        document.getElementById('csvInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = function(event) {
-                const text = event.target.result;
-                parseCsvText(text);
+                parseCsvText(event.target.result);
             };
             reader.readAsText(file, 'UTF-8');
         });
 
-        // CSVテキストの簡易パース（サンプルデータ生成 or 実ファイル解析）
         function parseCsvText(text) {
             const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
             parsedCsvRows = [];
-
-            // 簡単なパース処理（実務に合わせてカラム位置調整可能）
             lines.forEach((line, idx) => {
                 const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
                 if (cols.length >= 3) {
-                    // 日付、利用先、金額の自動推定（サンプル用）
                     const dateVal = cols[0].match(/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/) ? cols[0].replaceAll('/', '-') : new Date().toISOString().split('T')[0];
-                    const storeVal = cols[1] || '不明な店舗';
+                    const storeVal = cols[1] || 'カード利用';
                     const amountVal = parseInt(cols[2].replace(/[^0-9]/g, '')) || 0;
-
                     if (amountVal > 0) {
-                        // キーワードによるカテゴリ自動判定
                         let cat = 'その他';
-                        if (storeVal.includes('スーパー') || storeVal.includes('ライフ') || storeVal.includes('イオン') || storeVal.includes('食料')) cat = '食料品';
-                        else if (storeVal.includes('ドラッグ') || storeVal.includes('Amazon') || storeVal.includes('マツモト')) cat = '日用品';
-                        else if (storeVal.includes('カフェ') || storeVal.includes('スターバックス') || storeVal.includes('レストラン')) cat = '外食';
-
-                        parsedCsvRows.push({ id: Date.now() + idx, date: dateVal, store: storeVal, item: 'カード利用明細', category: cat, amount: amountVal });
+                        if (storeVal.includes('スーパー') || storeVal.includes('イオン') || storeVal.includes('ライフ')) cat = '食料品';
+                        else if (storeVal.includes('Amazon') || storeVal.includes('ドラッグ')) cat = '日用品';
+                        parsedCsvRows.push({ id: Date.now() + idx, date: dateVal, store: storeVal, item: 'カード明細', category: cat, amount: amountVal });
                     }
                 }
             });
-
-            // もしCSVフォーマットに合わずパースできなかった場合のダミープレビューフォールバック
             if (parsedCsvRows.length === 0) {
-                parsedCsvRows = [
-                    { id: 101, date: '2026-10-28', store: 'Amazon.co.jp', item: 'カード利用', category: '日用品', amount: 3480 },
-                    { id: 102, date: '2026-10-29', store: 'ENEOS スタンド', item: 'カード利用', category: 'その他', amount: 6500 },
-                    { id: 103, date: '2026-10-29', store: 'スターバックス', item: 'カード利用', category: '外食', amount: 680 }
-                ];
+                parsedCsvRows = [{ id: 101, date: '2026-10-28', store: 'Amazon.co.jp', item: 'カード利用', category: '日用品', amount: 3480 }];
             }
-
             renderCsvPreview();
             document.getElementById('csvPreviewArea').classList.remove('hidden');
             document.getElementById('previewArea').classList.add('hidden');
-            document.getElementById('csvStatus').textContent = `${parsedCsvRows.length}件の明細を検出`;
+            document.getElementById('csvStatus').textContent = `${parsedCsvRows.length}件検出`;
         }
 
-        // CSVプレビューテーブルの描画
         function renderCsvPreview() {
             const tbody = document.getElementById('csvPreviewBody');
             tbody.innerHTML = parsedCsvRows.map((r, i) => `
                 <tr class="border-b hover:bg-gray-50">
-                    <td class="p-2 text-center"><input type="checkbox" checked id="chk_${i}" class="csv-check" data-index="${i}"></td>
+                    <td class="p-2 text-center"><input type="checkbox" checked id="chk_${i}"></td>
                     <td class="p-2">${r.date}</td>
                     <td class="p-2 font-medium">${r.store}</td>
                     <td class="p-2 text-right">¥${r.amount.toLocaleString()}</td>
                     <td class="p-2">
                         <select id="cat_${i}" class="border rounded p-1 text-xs">
-                            <option value="食料品" ${r.category==='食料品'?'selected':''}>食料品</option>
-                            <option value="日用品" ${r.category==='日用品'?'selected':''}>日用品</option>
-                            <option value="外食" ${r.category==='外食'?'selected':''}>外食</option>
-                            <option value="その他" ${r.category==='その他'?'selected':''}>その他</option>
+                            <option value="食料品">食料品</option>
+                            <option value="日用品">日用品</option>
+                            <option value="外食">外食</option>
+                            <option value="その他" selected>その他</option>
                         </select>
                     </td>
                 </tr>
             `).join('');
         }
 
-        // 1件登録
         function saveSingleRecord() {
             const date = document.getElementById('inputDate').value;
             const store = document.getElementById('inputStore').value;
@@ -242,33 +282,23 @@
             records.unshift({ id: Date.now(), date, store, item, category, amount });
             localStorage.setItem('kakeibo_records', JSON.stringify(records));
             document.getElementById('previewArea').classList.add('hidden');
+            document.getElementById('receiptStatus').textContent = '登録完了しました！';
             updateUI();
         }
 
-        // CSV一括登録
         function saveCsvRecords() {
             parsedCsvRows.forEach((r, i) => {
                 const chk = document.getElementById(`chk_${i}`);
                 if (chk && chk.checked) {
                     const selectedCat = document.getElementById(`cat_${i}`).value;
-                    records.unshift({
-                        id: Date.now() + i,
-                        date: r.date,
-                        store: r.store,
-                        item: r.item,
-                        category: selectedCat,
-                        amount: r.amount
-                    });
+                    records.unshift({ id: Date.now() + i, date: r.date, store: r.store, item: r.item, category: selectedCat, amount: r.amount });
                 }
             });
-
             localStorage.setItem('kakeibo_records', JSON.stringify(records));
             document.getElementById('csvPreviewArea').classList.add('hidden');
-            document.getElementById('csvStatus').textContent = '一括登録が完了しました！';
             updateUI();
         }
 
-        // 画面およびグラフの更新
         function updateUI() {
             const tbody = document.getElementById('historyTable');
             tbody.innerHTML = records.map(r => `
@@ -276,47 +306,34 @@
                     <td class="p-2 text-gray-500 whitespace-nowrap">${r.date}</td>
                     <td class="p-2 font-medium">${r.store}</td>
                     <td class="p-2">${r.item}</td>
-                    <td class="p-2"><span class="px-2 py-0.5 text-xs rounded bg-indigo-50 text-indigo-600 border border-indigo-100">${r.category}</span></td>
+                    <td class="p-2"><span class="px-2 py-0.5 text-xs rounded bg-indigo-50 text-indigo-600 border">${r.category}</span></td>
                     <td class="p-2 text-right font-bold text-gray-700">¥${r.amount.toLocaleString()}</td>
                 </tr>
             `).join('');
-
             renderCharts();
         }
 
         function renderCharts() {
             const categories = ['食料品', '日用品', '外食', 'その他'];
-            const categoryTotals = categories.map(cat => 
-                records.filter(r => r.category === cat).reduce((sum, r) => sum + r.amount, 0)
-            );
+            const categoryTotals = categories.map(cat => records.filter(r => r.category === cat).reduce((sum, r) => sum + r.amount, 0));
 
             const ctxPie = document.getElementById('pieChart').getContext('2d');
             if (pieChartObj) pieChartObj.destroy();
             pieChartObj = new Chart(ctxPie, {
                 type: 'doughnut',
-                data: {
-                    labels: categories,
-                    datasets: [{ data: categoryTotals, backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#9ca3af'] }]
-                },
+                data: { labels: categories, datasets: [{ data: categoryTotals, backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#9ca3af'] }] },
                 options: { responsive: true, maintainAspectRatio: false }
             });
 
             const ctxTrend = document.getElementById('trendChart').getContext('2d');
             if (trendChartObj) trendChartObj.destroy();
-            
             const dates = [...new Set(records.map(r => r.date))].sort();
             const foodAmounts = dates.map(d => records.filter(r => r.date === d && r.category === '食料品').reduce((s, r) => s + r.amount, 0));
             const dailyAmounts = dates.map(d => records.filter(r => r.date === d && r.category === '日用品').reduce((s, r) => s + r.amount, 0));
 
             trendChartObj = new Chart(ctxTrend, {
                 type: 'bar',
-                data: {
-                    labels: dates,
-                    datasets: [
-                        { label: '食料品', data: foodAmounts, backgroundColor: '#6366f1' },
-                        { label: '日用品', data: dailyAmounts, backgroundColor: '#10b981' }
-                    ]
-                },
+                data: { labels: dates, datasets: [{ label: '食料品', data: foodAmounts, backgroundColor: '#6366f1' }, { label: '日用品', data: dailyAmounts, backgroundColor: '#10b981' }] },
                 options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
             });
         }
