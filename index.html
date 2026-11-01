@@ -16,20 +16,16 @@
             <p class="text-sm text-gray-500">Gemini AIレシート品目自動解析・CSV・ダッシュボード</p>
         </header>
 
-        <!-- 設定セクション（APIキー ＆ プロキシURL） -->
+        <!-- 設定セクション（APIキーのみ入力） -->
         <div class="bg-white p-4 rounded-xl shadow-md mb-4 border border-indigo-100">
             <details open>
-                <summary class="text-sm font-semibold text-indigo-600 cursor-pointer">⚙️ Gemini API & プロキシ設定</summary>
+                <summary class="text-sm font-semibold text-indigo-600 cursor-pointer">⚙️ Gemini API設定</summary>
                 <div class="mt-3 space-y-3">
                     <div>
-                        <label class="block text-xs text-gray-500 mb-1">Gemini APIキー (AIzaSy...)</label>
-                        <input type="password" id="apiKeyInput" placeholder="AIzaSy..." class="w-full border rounded p-2 text-sm font-mono bg-white">
+                        <label class="block text-xs text-gray-500 mb-1">Gemini APIキー (AQ... または AIzaSy...)</label>
+                        <input type="password" id="apiKeyInput" placeholder="APIキーを入力" class="w-full border rounded p-2 text-sm font-mono bg-white">
                     </div>
-                    <div>
-                        <label class="block text-xs text-gray-500 mb-1">Cloudflare Worker プロキシURL</label>
-                        <input type="text" id="proxyUrlInput" placeholder="https://blue-frost-7ef1.kawatatu-boogie.workers.dev" class="w-full border rounded p-2 text-sm font-mono bg-white">
-                    </div>
-                    <button onclick="saveSettings()" class="bg-indigo-600 text-white text-xs px-4 py-2 rounded shadow hover:bg-indigo-700">設定を保存する</button>
+                    <button onclick="saveSettings()" class="bg-indigo-600 text-white text-xs px-4 py-2 rounded shadow hover:bg-indigo-700">APIキーを保存する</button>
                 </div>
             </details>
         </div>
@@ -155,17 +151,13 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const savedKey = localStorage.getItem('gemini_api_key') || '';
-            const savedProxy = localStorage.getItem('gemini_proxy_url') || '';
             if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
-            if (savedProxy) document.getElementById('proxyUrlInput').value = savedProxy;
         });
 
         function saveSettings() {
             const key = document.getElementById('apiKeyInput').value.trim();
-            const proxy = document.getElementById('proxyUrlInput').value.trim();
             localStorage.setItem('gemini_api_key', key);
-            localStorage.setItem('gemini_proxy_url', proxy);
-            alert('設定を保存しました！');
+            alert('APIキーを保存しました！');
         }
 
         let records = JSON.parse(localStorage.getItem('kakeibo_records') || '[]');
@@ -190,16 +182,17 @@
             });
         }
 
-        // プロキシ経由でGemini APIを呼び出すレシート解析処理（モデル名を gemini-1.5-flash に指定）
+        // プロキシ経由でGemini APIを呼び出すレシート解析処理
         document.getElementById('receiptInput').addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
             const apiKey = localStorage.getItem('gemini_api_key') || document.getElementById('apiKeyInput').value.trim();
-            const proxyUrl = localStorage.getItem('gemini_proxy_url') || document.getElementById('proxyUrlInput').value.trim();
+            // Worker URLを直接固定指定（末尾スラッシュなし）
+            const proxyUrl = "https://blue-frost-7ef1.kawatatu-boogie.workers.dev";
 
-            if (!apiKey || !proxyUrl) {
-                alert('APIキーとCloudflare WorkerのプロキシURLを両方設定・保存してください。');
+            if (!apiKey) {
+                alert('APIキーを設定・保存してください。');
                 return;
             }
 
@@ -208,17 +201,12 @@
 
             try {
                 const base64Image = await fileToBase64(file);
-                
-                // モデル名を gemini-1.5-flash に指定したURL
-                const targetUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
-                // Cloudflare Worker経由でリクエスト送信
                 const response = await fetch(proxyUrl, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
-                        'x-goog-api-key': apiKey,
-                        'x-target-url': targetUrl
+                        'x-goog-api-key': apiKey
                     },
                     body: JSON.stringify({
                         contents: [{
